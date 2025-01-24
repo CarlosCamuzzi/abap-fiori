@@ -1,49 +1,49 @@
-class ZCL_ZORDEM_VENDA_DPC_EXT definition
-  public
-  inheriting from ZCL_ZORDEM_VENDA_DPC
-  create public .
+CLASS zcl_zordem_venda_dpc_ext DEFINITION
+  PUBLIC
+  INHERITING FROM zcl_zordem_venda_dpc
+  CREATE PUBLIC .
 
-public section.
-protected section.
+  PUBLIC SECTION.
+  PROTECTED SECTION.
 
-  methods CABECALHOSET_CREATE_ENTITY
-    redefinition .
-  methods CABECALHOSET_DELETE_ENTITY
-    redefinition .
-  methods CABECALHOSET_GET_ENTITY
-    redefinition .
-  methods CABECALHOSET_GET_ENTITYSET
-    redefinition .
-  methods CABECALHOSET_UPDATE_ENTITY
-    redefinition .
-  methods CHECK_SUBSCRIPTION_AUTHORITY
-    redefinition .
-  methods ITEMSET_CREATE_ENTITY
-    redefinition .
-  methods ITEMSET_DELETE_ENTITY
-    redefinition .
-  methods ITEMSET_GET_ENTITY
-    redefinition .
-  methods ITEMSET_GET_ENTITYSET
-    redefinition .
-  methods ITEMSET_UPDATE_ENTITY
-    redefinition .
-  methods MENSAGEMSET_CREATE_ENTITY
-    redefinition .
-  methods MENSAGEMSET_GET_ENTITY
-    redefinition .
-  methods MENSAGEMSET_GET_ENTITYSET
-    redefinition .
-  methods MENSAGEMSET_UPDATE_ENTITY
-    redefinition .
-  methods MENSAGEMSET_DELETE_ENTITY
-    redefinition .
-private section.
+    METHODS cabecalhoset_create_entity
+        REDEFINITION .
+    METHODS cabecalhoset_delete_entity
+        REDEFINITION .
+    METHODS cabecalhoset_get_entity
+        REDEFINITION .
+    METHODS cabecalhoset_get_entityset
+        REDEFINITION .
+    METHODS cabecalhoset_update_entity
+        REDEFINITION .
+    METHODS check_subscription_authority
+        REDEFINITION .
+    METHODS itemset_create_entity
+        REDEFINITION .
+    METHODS itemset_delete_entity
+        REDEFINITION .
+    METHODS itemset_get_entity
+        REDEFINITION .
+    METHODS itemset_get_entityset
+        REDEFINITION .
+    METHODS itemset_update_entity
+        REDEFINITION .
+    METHODS mensagemset_create_entity
+        REDEFINITION .
+    METHODS mensagemset_get_entity
+        REDEFINITION .
+    METHODS mensagemset_get_entityset
+        REDEFINITION .
+    METHODS mensagemset_update_entity
+        REDEFINITION .
+    METHODS mensagemset_delete_entity
+        REDEFINITION .
+  PRIVATE SECTION.
 ENDCLASS.
 
 
 
-CLASS ZCL_ZORDEM_VENDA_DPC_EXT IMPLEMENTATION.
+CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
 
 
   METHOD cabecalhoset_create_entity.
@@ -61,10 +61,10 @@ CLASS ZCL_ZORDEM_VENDA_DPC_EXT IMPLEMENTATION.
         es_data = er_entity
     ).
 
-   " Copiando os campos da entidade para a estrura tabela
-   " A tabela pode ter algum campo diferente do que tem na entidade, mandt por ex
-   " Então, movemos os campos correspondentes para ls_cab, que é um type tabela zovcabecalho
-   " Depois podemos preencher o que faltou, como mostrado abaixo
+    " Copiando os campos da entidade para a estrura tabela
+    " A tabela pode ter algum campo diferente do que tem na entidade, mandt por ex
+    " Então, movemos os campos correspondentes para ls_cab, que é um type tabela zovcabecalho
+    " Depois podemos preencher o que faltou, como mostrado abaixo
     MOVE-CORRESPONDING er_entity TO ls_cab.
 
     " Preenchendo outros dados que não vem na request
@@ -72,16 +72,16 @@ CLASS ZCL_ZORDEM_VENDA_DPC_EXT IMPLEMENTATION.
     ls_cab-criacao_hora    = sy-uzeit.
     ls_cab-criacao_usuario = sy-uname.
 
-   " Último ID, incrementando e salva no banco
+    " Último ID, incrementando e salva no banco
     SELECT SINGLE MAX( ordemid )
       INTO ld_lastid
-      FROM zovcab.
+      FROM zovcabecalho.
 
     ls_cab-ordemid = ld_lastid + 1.
     INSERT zovcabecalho FROM ls_cab.
 
-  " Verifica se o insert deu certo
-  " Se estiver errado, o objeto de msg retorna a msg
+    " Verifica se o insert deu certo
+    " Se estiver errado, o objeto de msg retorna a msg
     IF sy-subrc <> 0.
       lo_msg->add_message_text_only(
         EXPORTING
@@ -111,28 +111,58 @@ CLASS ZCL_ZORDEM_VENDA_DPC_EXT IMPLEMENTATION.
   ENDMETHOD.
 
 
-  method CABECALHOSET_DELETE_ENTITY.
+  METHOD cabecalhoset_delete_entity.
 
-  endmethod.
-
-
-  method CABECALHOSET_GET_ENTITY.
-
-  endmethod.
+  ENDMETHOD.
 
 
-  method CABECALHOSET_GET_ENTITYSET.
+  METHOD cabecalhoset_get_entity.
 
-  endmethod.
-
-
-  method CABECALHOSET_UPDATE_ENTITY.
-
-  endmethod.
+  ENDMETHOD.
 
 
-  method CHECK_SUBSCRIPTION_AUTHORITY.
-  endmethod.
+  METHOD cabecalhoset_get_entityset.
+
+    DATA: lt_cab       TYPE STANDARD TABLE OF zovcabecalho,
+          ls_cab       TYPE zovcabecalho,
+          " variável tem a mesma estrutura de uma linha individual da tabela interna.
+          " usada para armazenar uma linha da tabela interna referenciada.
+          ls_entityset LIKE LINE OF et_entityset.
+
+    SELECT *
+       INTO TABLE lt_cab
+       FROM zovcabecalho.
+
+    LOOP AT lt_cab INTO ls_cab.
+      CLEAR ls_entityset.
+      MOVE-CORRESPONDING ls_cab TO ls_entityset.
+
+      " Atribuindo direto, pois o nome do campo de et_entityset é diferente de ls_cab
+      ls_entityset-criadopor = ls_cab-criacao_usuario.
+
+      " Conversão pelo mesmo motivo do post do cabeçalho.
+      " Na tabela os campos de data e hora são individuais e na requisição é um só
+      CONVERT
+          DATE ls_cab-criacao_data
+          TIME ls_cab-criacao_hora
+          INTO TIME STAMP ls_entityset-datacriacao
+          TIME ZONE sy-zonlo.
+
+      " ls_entityset é uma linha (like line of)
+      " Então precisa de fazer o append para a tabela de entidade
+      APPEND ls_entityset TO et_entityset.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+
+  METHOD cabecalhoset_update_entity.
+
+  ENDMETHOD.
+
+
+  METHOD check_subscription_authority.
+  ENDMETHOD.
 
 
   METHOD itemset_create_entity.
@@ -148,8 +178,8 @@ CLASS ZCL_ZORDEM_VENDA_DPC_EXT IMPLEMENTATION.
 
     MOVE-CORRESPONDING er_entity TO ls_item.
 
-  " Caso quem estiver cosumindo o serviço não passar o ID do item,
-  "   vamos pegar o último ID this ordem e incrementar o ID do item
+    " Caso quem estiver cosumindo o serviço não passar o ID do item,
+    "   vamos pegar o último ID this ordem e incrementar o ID do item
     IF er_entity-itemid EQ 0.
       SELECT SINGLE MAX( itemid )
         INTO er_entity-itemid
@@ -157,8 +187,7 @@ CLASS ZCL_ZORDEM_VENDA_DPC_EXT IMPLEMENTATION.
         WHERE ordemid = er_entity-ordemid.
 
       ls_item-itemid = er_entity-itemid = er_entity-itemid + 1.
-      ENDIF.
-
+    ENDIF.
 
     INSERT zovitem_ord FROM ls_item.
 
@@ -177,47 +206,47 @@ CLASS ZCL_ZORDEM_VENDA_DPC_EXT IMPLEMENTATION.
   ENDMETHOD.
 
 
-  method ITEMSET_DELETE_ENTITY.
+  METHOD itemset_delete_entity.
 
-  endmethod.
-
-
-  method ITEMSET_GET_ENTITY.
-
-  endmethod.
+  ENDMETHOD.
 
 
-  method ITEMSET_GET_ENTITYSET.
+  METHOD itemset_get_entity.
 
-  endmethod.
-
-
-  method ITEMSET_UPDATE_ENTITY.
-
-  endmethod.
+  ENDMETHOD.
 
 
-  method MENSAGEMSET_CREATE_ENTITY.
+  METHOD itemset_get_entityset.
 
-  endmethod.
-
-
-  method MENSAGEMSET_DELETE_ENTITY.
-
-  endmethod.
+  ENDMETHOD.
 
 
-  method MENSAGEMSET_GET_ENTITY.
+  METHOD itemset_update_entity.
 
-  endmethod.
-
-
-  method MENSAGEMSET_GET_ENTITYSET.
-
-  endmethod.
+  ENDMETHOD.
 
 
-  method MENSAGEMSET_UPDATE_ENTITY.
+  METHOD mensagemset_create_entity.
 
-  endmethod.
+  ENDMETHOD.
+
+
+  METHOD mensagemset_delete_entity.
+
+  ENDMETHOD.
+
+
+  METHOD mensagemset_get_entity.
+
+  ENDMETHOD.
+
+
+  METHOD mensagemset_get_entityset.
+
+  ENDMETHOD.
+
+
+  METHOD mensagemset_update_entity.
+
+  ENDMETHOD.
 ENDCLASS.
