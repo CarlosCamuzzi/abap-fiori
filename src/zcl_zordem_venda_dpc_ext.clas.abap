@@ -148,14 +148,17 @@ CLASS ZCL_ZORDEM_VENDA_DPC_EXT IMPLEMENTATION.
 
     MOVE-CORRESPONDING er_entity TO ls_item.
 
+  " Caso quem estiver cosumindo o serviço não passar o ID do item,
+  "   vamos pegar o último ID this ordem e incrementar o ID do item
     IF er_entity-itemid EQ 0.
       SELECT SINGLE MAX( itemid )
         INTO er_entity-itemid
         FROM zovitem_ord
         WHERE ordemid = er_entity-ordemid.
 
-      er_entity-itemid = er_entity-itemid + 1.
-    ENDIF.
+      ls_item-itemid = er_entity-itemid = er_entity-itemid + 1.
+      ENDIF.
+
 
     INSERT zovitem_ord FROM ls_item.
 
