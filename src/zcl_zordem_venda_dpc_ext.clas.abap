@@ -213,10 +213,41 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
 
   METHOD itemset_get_entity.
 
+
   ENDMETHOD.
 
 
   METHOD itemset_get_entityset.
+
+    DATA: ld_ordemid       TYPE int4,                       " Local data
+          lt_ordemid_range TYPE RANGE OF int4,              " Range de ID de ordem
+          ls_ordemid_range LIKE LINE OF lt_ordemid_range,   " Linha da tabela de range de ID Ordem
+          ls_key_tab       LIKE LINE OF it_key_tab.         " Linha da tabela de chaves (ordemId)
+
+    " Input
+    " Aqui vamos passar o ID do cabeçalho da ordem de venda na request
+    " Passando a chave, vamos retornar apenas os Itens dessa Ordem específica
+    READ TABLE it_key_tab INTO ls_key_tab WITH KEY name = 'OrdemId'.
+    IF sy-subrc EQ 0.
+      ld_ordemid = ls_key_tab-value.
+
+      CLEAR ls_ordemid_range.
+
+      ls_ordemid_range-sign = 'I'.          " Include
+      ls_ordemid_range-option = 'EQ'.       " Equal - Somente itens da Ordem especificada
+      ls_ordemid_range-low = ld_ordemid.    " Limite inferior do intervalo
+      " Esse último campo poderia ser passado direto, conforme abaixo
+      " ls_ordemid_range-low = ls_key_tab-value.
+
+      " Setando na tabela de range de ordemId
+      APPEND ls_ordemid_range TO lt_ordemid_range.
+    ENDIF.
+
+    " Setando na et_entityset de acordo com os ids do range
+    SELECT *
+    INTO CORRESPONDING FIELDS OF TABLE et_entityset
+    FROM zovitem
+   WHERE ordemid IN lt_ordemid_range.
 
   ENDMETHOD.
 
