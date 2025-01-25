@@ -46,7 +46,7 @@ ENDCLASS.
 CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
 
 
-  METHOD cabecalhoset_create_entity.
+  METHOD cabecalhoset_create_entity.    " Criar cabeçalho
     DATA: ld_lastid TYPE int4.
     DATA: ls_cab    TYPE zovcabecalho. " table
 
@@ -116,12 +116,63 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD cabecalhoset_get_entity.
+  METHOD cabecalhoset_get_entity.   " Cabeçalho específico
+
+    DATA: ld_ordemid TYPE zovcabecalho-ordemid,
+          ls_key_tab LIKE LINE OF it_key_tab,   " Pegando a chave
+          ls_cab     TYPE zovcabecalho.         " Dados do banco
+
+    DATA(lo_msg) = me->/iwbep/if_mgw_conv_srv_runtime~get_message_container( ).
+
+    " Input
+    READ TABLE it_key_tab INTO ls_key_tab WITH KEY name = 'OrdemId'.
+    IF sy-subrc NE 0.
+      lo_msg->add_message_text_only(
+        EXPORTING
+            iv_msg_type = 'E'
+            iv_msg_text = 'ID da ordem não informado'
+      ).
+
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+        EXPORTING
+          message_container = lo_msg.
+    ENDIF.
+
+     " Setando a ordem encontrada no read table par ao campo que vai no where
+     ld_ordemid = ls_key_tab-value.
+
+    SELECT SINGLE *
+       INTO ls_cab
+       FROM zovcabecalho
+       WHERE ordemid = ld_ordemid.
+
+    IF sy-subrc EQ 0.
+      MOVE-CORRESPONDING ls_cab TO er_entity.
+
+      er_entity-criadopor = ls_cab-criacao_usuario.
+
+      CONVERT
+         DATE ls_cab-criacao_data
+         TIME ls_cab-criacao_hora
+         INTO TIME STAMP er_entity-datacriacao
+         TIME ZONE sy-zonlo.    " UTC
+
+    ELSE.
+        lo_msg->add_message_text_only(
+        EXPORTING
+            iv_msg_type = 'E'
+            iv_msg_text = 'ID da ordem não encontrado'
+      ).
+
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+        EXPORTING
+          message_container = lo_msg.
+    ENDIF.
 
   ENDMETHOD.
 
 
-  METHOD cabecalhoset_get_entityset.
+  METHOD cabecalhoset_get_entityset.    " Todos os cabeçalhos
 
     DATA: lt_cab       TYPE STANDARD TABLE OF zovcabecalho,
           ls_cab       TYPE zovcabecalho,
@@ -165,7 +216,7 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD itemset_create_entity.
+  METHOD itemset_create_entity.     " Criar item
 
     DATA: ls_item TYPE zovitem_ord. " Structure para tabela item
 
@@ -217,7 +268,7 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD itemset_get_entityset.
+  METHOD itemset_get_entityset.     " Retorna itens baseado na ordemId (cabeçalho)
 
     DATA: ld_ordemid       TYPE int4,                       " Local data
           lt_ordemid_range TYPE RANGE OF int4,              " Range de ID de ordem
@@ -246,7 +297,7 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
     " Setando na et_entityset de acordo com os ids do range
     SELECT *
     INTO CORRESPONDING FIELDS OF TABLE et_entityset
-    FROM zovitem
+    FROM zovitem_ord
    WHERE ordemid IN lt_ordemid_range.
 
   ENDMETHOD.
