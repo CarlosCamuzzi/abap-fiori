@@ -396,6 +396,39 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
 
   METHOD itemset_update_entity.
 
+    DATA(lo_msg) = me->/iwbep/if_mgw_conv_srv_runtime~get_message_container( ).
+
+    io_data_provider->read_entry_data(
+        IMPORTING
+            es_data = er_entity
+    ).
+
+    er_entity-ordemid = it_key_tab[ name = 'OrdemId' ]-value.
+    er_entity-itemid = it_key_tab[ name = 'ItemId' ]-value.
+    er_entity-precotot = er_entity-quantidade * er_entity-precouni.
+
+    UPDATE zovitem_ord
+       SET material   = er_entity-material
+           descricao  = er_entity-descricao
+           quantidade = er_entity-quantidade
+           precouni   = er_entity-precouni
+           precotot   = er_entity-precotot
+     WHERE ordemid    = er_entity-ordemid
+       AND itemid     = er_entity-itemid.
+
+    IF sy-subrc NE 0.
+      lo_msg->add_message_text_only(
+          EXPORTING
+              iv_msg_type = 'E'
+              iv_msg_text = 'Erro ao atualizar item'
+      ).
+
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+        EXPORTING
+          message_container = lo_msg.
+    ENDIF.
+
+
   ENDMETHOD.
 
 
