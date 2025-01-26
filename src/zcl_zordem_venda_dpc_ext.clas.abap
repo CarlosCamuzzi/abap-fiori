@@ -259,6 +259,36 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
 
   METHOD cabecalhoset_update_entity.
 
+    DATA(lo_msg) = me->/iwbep/if_mgw_conv_srv_runtime~get_message_container( ).
+
+    io_data_provider->read_entry_data(
+        IMPORTING
+            es_data = er_entity
+    ).
+
+    " Na tabela de chaves, pegar o valor do campo 'OrdemId'
+    er_entity-ordemid = it_key_tab[ name = 'OrdemId' ]-value.
+
+    UPDATE zovcabecalho
+       SET clienteid  = er_entity-clienteid
+           totalitens = er_entity-totalitens
+           totalfrete = er_entity-totalfrete
+           totalordem = er_entity-totalordem
+           status     = er_entity-status
+       WHERE ordemid  = er_entity-ordemid.
+
+    IF sy-subrc NE 0.
+      lo_msg->add_message_text_only(
+          EXPORTING
+              iv_msg_type = 'E'
+              iv_msg_text = 'Erro ao atuazliar ordem'
+      ).
+
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+        EXPORTING
+          message_container = lo_msg.
+    ENDIF.
+
   ENDMETHOD.
 
 
