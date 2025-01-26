@@ -138,8 +138,8 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
           message_container = lo_msg.
     ENDIF.
 
-     " Setando a ordem encontrada no read table par ao campo que vai no where
-     ld_ordemid = ls_key_tab-value.
+    " Setando a ordem encontrada no read table par ao campo que vai no where
+    ld_ordemid = ls_key_tab-value.
 
     SELECT SINGLE *
        INTO ls_cab
@@ -158,11 +158,11 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
          TIME ZONE sy-zonlo.    " UTC
 
     ELSE.
-        lo_msg->add_message_text_only(
-        EXPORTING
-            iv_msg_type = 'E'
-            iv_msg_text = 'ID da ordem não encontrado'
-      ).
+      lo_msg->add_message_text_only(
+      EXPORTING
+          iv_msg_type = 'E'
+          iv_msg_text = 'ID da ordem não encontrado'
+    ).
 
       RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
         EXPORTING
@@ -180,9 +180,59 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
           " usada para armazenar uma linha da tabela interna referenciada.
           ls_entityset LIKE LINE OF et_entityset.
 
+    " Ordernação
+    DATA: lt_orderby TYPE STANDARD TABLE OF string,
+          ld_orderby TYPE string.
+
+    " Essa rotina serve para converter para setar DESCENDING ou
+    "   ASCENDING para criar o orderby dinâmico
+
+    " IT_ORDER type /IWBEP/S_MGW_SORTING_ORDER
+    " Estrutura com 2 campos: ORDER e PROPERTY
+    LOOP AT it_order INTO DATA(ls_order).
+      " OBS: Translate funciona da mesma forma que a func
+      "      Modifica para TO UPPER e salva na mesma variável
+      " Necessário para padronizar o case das palavras que vem na URI
+      ls_order-property = to_upper( ls_order-property ).
+      TRANSLATE ls_order-order TO UPPER CASE.
+
+      IF ls_order-order = 'DESC'.
+        ls_order-order = 'DESCENDING'.
+      ELSE.
+        ls_order-order = 'ASCENDING'.
+      ENDIF.
+
+      " Append com toda a string de property + order
+      APPEND |{ ls_order-property } { ls_order-order }|
+          TO lt_orderby.
+
+    ENDLOOP.
+
+    " Concatenação necessária, pois o que é passado para o select é o tipo de dados
+    "       e não a tabela
+    CONCATENATE LINES OF lt_orderby INTO ld_orderby SEPARATED BY ', '.
+
+    " ordenação obrigatória caso nenhuma seja definida
+    " foi feito assim pois dará erro se não passar nada junto com offset da paginação
+    IF ld_orderby = '' .
+      ld_orderby = 'OrdemId ASCENDING'.
+    ENDIF.
+
+    " Select para paginação é declarado de forma diferente, conforme abaixo
+*    SELECT *
+*       INTO TABLE lt_cab
+*       FROM zovcabecalho
+*       WHERE (iv_filter_string)
+*       ORDER BY (ld_orderby).
+
+    " Select com a paginação
     SELECT *
-       INTO TABLE lt_cab
-       FROM zovcabecalho.
+        FROM zovcabecalho
+        WHERE (iv_filter_string)
+        ORDER BY (ld_orderby)
+        INTO TABLE @lt_cab
+        UP TO @is_paging-top ROWS
+        OFFSET @is_paging-skip.
 
     LOOP AT lt_cab INTO ls_cab.
       CLEAR ls_entityset.
@@ -192,7 +242,7 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
       ls_entityset-criadopor = ls_cab-criacao_usuario.
 
       " Conversão pelo mesmo motivo do post do cabeçalho.
-      " Na tabela os campos de data e hora são individuais e na requisição é um só
+      " Na tabela os campos de data e hora são individ  uais e na requisição é um só
       CONVERT
           DATE ls_cab-criacao_data
           TIME ls_cab-criacao_hora
@@ -264,6 +314,17 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
 
   METHOD itemset_get_entity.
 
+    DATA: ls_key_tab LIKE LINE OF it_key_tab,
+          ls_item    TYPE zovitem_ord,
+          ld_error   TYPE flag.    " Booleano
+
+    DATA(lo_msg) = me->/iwbep/if_mgw_conv_srv_runtime~get_message_container( ).
+
+    "input
+    READ TABLE it_key_tab INTO ls_key_tab WITH KEY name = 'OrdemId'.
+    " PAREI AQUI
+
+
 
   ENDMETHOD.
 
@@ -332,3 +393,4 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
 
   ENDMETHOD.
 ENDCLASS.
+
