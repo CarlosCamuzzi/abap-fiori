@@ -350,11 +350,58 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
 
     DATA(lo_msg) = me->/iwbep/if_mgw_conv_srv_runtime~get_message_container( ).
 
-    "input
+    " Busca OrdemId e seta ld_error se não encontrar
     READ TABLE it_key_tab INTO ls_key_tab WITH KEY name = 'OrdemId'.
-    " PAREI AQUI
+    IF sy-subrc NE 0.
+      ld_error = 'X'.
+      lo_msg->add_message_text_only(
+          EXPORTING
+          iv_msg_type = 'E'
+          iv_msg_text = 'Id da ordem não informado.'
+      ).
+    ENDIF.
 
+    " Busca ItemId e seta ld_error se não encontrar
+    READ TABLE it_key_tab INTO ls_key_tab WITH KEY name = 'OrdemId'.
+    IF sy-subrc NE 0.
+      ld_error = 'X'.
+      lo_msg->add_message_text_only(
+          EXPORTING
+          iv_msg_type = 'E'
+          iv_msg_text = 'Id do item não informado.'
+      ).
+    ENDIF.
 
+    " Foram feitas duas verificações e só lançada a exception de uma vez
+    "   para não setar 2x a exception. Pode acontecer de informar um parâmetro
+    "   e não o outros, dessa forma ele verifica e acumula as msg de erro para
+    "   não precisar repetir
+    IF ld_error EQ 'X'.
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+        EXPORTING
+          message_container = lo_msg.
+    ENDIF.
+
+    " Caso não tenha exception, segue no select
+    SELECT SINGLE *
+        INTO ls_item
+        FROM zovitem_ord
+       WHERE ordemid = ls_item-ordemid
+         AND itemid = ls_item-itemid.
+
+    IF sy-subrc EQ 0.
+      MOVE-CORRESPONDING ls_item TO er_entity.
+    ELSE.
+      lo_msg->add_message_text_only(
+       EXPORTING
+       iv_msg_type = 'E'
+       iv_msg_text = 'Item não encontrado.'
+   ).
+
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+        EXPORTING
+          message_container = lo_msg.
+    ENDIF.
 
   ENDMETHOD.
 
