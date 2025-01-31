@@ -111,7 +111,49 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD cabecalhoset_delete_entity.
+  METHOD cabecalhoset_delete_entity.    " Deletando uma ordem específica e seus itens
+
+    DATA: ls_key_tab LIKE LINE OF it_key_tab.
+
+    DATA(lo_msg) = me->/iwbep/if_mgw_conv_srv_runtime~get_message_container( ).
+
+    READ TABLE it_key_tab INTO ls_key_tab WITH KEY name = 'OrdemId'.
+    IF sy-subrc NE 0.
+      lo_msg->add_message_text_only(
+      EXPORTING
+          iv_msg_type = 'E'
+          iv_msg_text = 'OrdemId não informado'
+      ).
+
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+        EXPORTING
+          message_container = lo_msg.
+    ENDIF.
+
+    " Deletando os itens da ordem especificada
+    " Na regra de negócio, não existe item sem cab
+    DELETE FROM zovitem_ord WHERE ordemid = ls_key_tab-value.
+
+    " Deletando ordem
+    DELETE FROM zovcabecalho WHERE ordemid = ls_key_tab-value.
+
+    " Caso dê erro em algum delete, dar rollback e lançar exception
+    IF sy-subrc <> 0.
+      ROLLBACK WORK.
+
+      lo_msg->add_message_text_only(
+        EXPORTING
+          iv_msg_type = 'E'
+          iv_msg_text = 'Erro ao remover ordem'
+      ).
+
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+        EXPORTING
+          message_container = lo_msg.
+    ENDIF.
+
+    " Se não entrar no if, não há erros, então faz o commit.
+    COMMIT WORK AND WAIT.
 
   ENDMETHOD.
 
@@ -337,12 +379,36 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD itemset_delete_entity.
+  METHOD itemset_delete_entity. " Removendo um item específico de uma ordem
+
+    DATA: ls_item    TYPE zovitem_ord,          " Estrutura do item para salvar as info
+          ls_key_tab LIKE LINE OF it_key_tab.   " Estrutura da tabela de chaves da entidade
+
+    DATA(lo_msg) = me->/iwbep/if_mgw_conv_srv_runtime~get_message_container( ).
+
+    ls_item-ordemid = it_key_tab[ name = 'OrdemId' ]-value.
+    ls_item-itemid = it_key_tab[ name = 'ItemId' ]-value.
+
+    DELETE FROM zovitem_ord
+          WHERE ordemid = ls_item-ordemid
+            AND itemid = ls_item-itemid.
+
+    IF sy-subrc NE 0.
+      lo_msg->add_message_text_only(
+        EXPORTING
+          iv_msg_type = 'E'
+          iv_msg_text = 'Erro ao remover item'
+      ).
+
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+        EXPORTING
+          message_container = lo_msg.
+    ENDIF.
 
   ENDMETHOD.
 
 
-  METHOD itemset_get_entity.
+  METHOD itemset_get_entity.    " Retorna todos os itens
 
     DATA: ls_key_tab LIKE LINE OF it_key_tab,
           ls_item    TYPE zovitem_ord,
@@ -407,6 +473,7 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
 
 
   METHOD itemset_get_entityset.     " Retorna itens baseado na ordemId (cabeçalho)
+  "  Usa a propriedade de navegação
 
     DATA: ld_ordemid       TYPE int4,                       " Local data
           lt_ordemid_range TYPE RANGE OF int4,              " Range de ID de ordem
