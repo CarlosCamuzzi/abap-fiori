@@ -4,6 +4,9 @@ CLASS zcl_zordem_venda_dpc_ext DEFINITION
   CREATE PUBLIC .
 
   PUBLIC SECTION.
+
+    METHODS /iwbep/if_mgw_appl_srv_runtime~create_deep_entity
+        REDEFINITION .
   PROTECTED SECTION.
 
     METHODS cabecalhoset_create_entity
@@ -30,13 +33,13 @@ CLASS zcl_zordem_venda_dpc_ext DEFINITION
         REDEFINITION .
     METHODS mensagemset_create_entity
         REDEFINITION .
+    METHODS mensagemset_delete_entity
+        REDEFINITION .
     METHODS mensagemset_get_entity
         REDEFINITION .
     METHODS mensagemset_get_entityset
         REDEFINITION .
     METHODS mensagemset_update_entity
-        REDEFINITION .
-    METHODS mensagemset_delete_entity
         REDEFINITION .
   PRIVATE SECTION.
 ENDCLASS.
@@ -473,7 +476,7 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
 
 
   METHOD itemset_get_entityset.     " Retorna itens baseado na ordemId (cabeçalho)
-  "  Usa a propriedade de navegação
+    "  Usa a propriedade de navegação
 
     DATA: ld_ordemid       TYPE int4,                       " Local data
           lt_ordemid_range TYPE RANGE OF int4,              " Range de ID de ordem
@@ -569,5 +572,159 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
   METHOD mensagemset_update_entity.
 
   ENDMETHOD.
-ENDCLASS.
 
+
+  METHOD /iwbep/if_mgw_appl_srv_runtime~create_deep_entity.
+
+    DATA: ls_deep_entity TYPE zcl_zordem_venda_mpc_ext=>ty_ordem_item,
+          ls_deep_item   TYPE zcl_zordem_venda_mpc_ext=>ts_item.
+
+    DATA: ls_cab          TYPE zovcabecalho,
+          lt_item         TYPE STANDARD TABLE OF zovitem_ord,
+          ls_item         TYPE zovitem_ord,
+          ld_updkz        TYPE char1, " flag par controlar se a ordem é insert ou update
+          ld_datahora(14) TYPE c.
+
+    DATA(lo_msg) = me->/iwbep/if_mgw_conv_srv_runtime~get_message_container( ).
+
+    CALL METHOD io_data_provider->read_entry_data
+      IMPORTING
+        es_data = ls_deep_entity.
+
+    " Cabeçalho
+    " Ordem zero, então precisa de criar a ordem
+    " Obs.: Insert inserido após verificação de exception
+    IF ls_deep_entity-ordemid = 0.
+      ld_updkz = 'I'. " Insert
+
+      MOVE-CORRESPONDING ls_deep_entity TO ls_cab.
+
+      ls_cab-criacao_data = sy-datum.
+      ls_cab-criacao_hora = sy-uzeit.
+      ls_cab-criacao_usuario = sy-uname.
+
+*      ld_datahora            = ls_deep_entity-datacriacao.
+*      ls_cab-criacao_data    = ld_datahora(8).
+*      ls_cab-criacao_hora    = ld_datahora+8(6).
+*      ls_cab-criacao_usuario = ls_deep_entity-criadopor.
+
+      " Seleciona a última e faz o incremento
+      SELECT SINGLE MAX( ordemid )
+          INTO ls_cab-ordemid
+        FROM zovcabecalho.
+
+      ls_cab-ordemid = ls_cab-ordemid + 1.
+
+      " Se não for inclusão, então é Update/Modify
+      " Obs.: Modify inserido após verificação de exception
+    ELSE.
+      ld_updkz = 'U'.
+
+      " Carrega dados atuais
+      SELECT SINGLE *
+        INTO ls_cab
+        FROM zovcabecalho
+        WHERE ordemid = ls_deep_entity-ordemid.
+
+      ls_cab-clienteid  = ls_deep_entity-clienteid.
+      ls_cab-status     = ls_deep_entity-status.
+      ls_cab-totalitens = ls_deep_entity-totalitens.
+      ls_cab-totalfrete = ls_deep_entity-totalfrete.
+      ls_cab-totalordem = ls_cab-totalitens + ls_cab-totalfrete.
+    ENDIF.
+
+    " Loop nos itens que vem da entity na request
+    LOOP AT ls_deep_entity-toItem INTO ls_deep_item.
+      MOVE-CORRESPONDING ls_deep_item TO ls_item. " Movendo pra estrutura
+
+      " Como é um item, temos que pegar a ordemId
+      " OrdemId que veio na request da ordem ou foi gerada para uma nova ordem
+      ls_item-ordemid = ls_cab-ordemid.
+      APPEND ls_item TO lt_item.
+    ENDLOOP.
+
+    " Salvar no banco: Cabeçalho
+    IF ld_updkz = 'I'.
+    " NÃO ESTÁ INSERINDO
+      INSERT zovcabecalho FROM ls_cab. " Salvando
+
+      IF sy-subrc <> 0.                " Em caso de erro
+        ROLLBACK WORK.
+        lo_msg->add_message_text_only(
+            EXPORTING
+              iv_msg_type = 'E'
+              iv_msg_text = 'Erro ao inserir ordem'
+          ).
+
+        RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+          EXPORTING
+            message_container = lo_msg.
+      ENDIF.
+    ELSE.
+      MODIFY zovcabecalho FROM ls_cab.
+
+      IF sy-subrc <> 0.
+        ROLLBACK WORK.
+
+        lo_msg->add_message_text_only(
+              EXPORTING
+                iv_msg_type = 'E'
+                iv_msg_text = 'Erro ao atualizar ordem'
+            ).
+
+        RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+          EXPORTING
+            message_container = lo_msg.
+      ENDIF.
+    ENDIF.
+
+    " Deletar todos itens de uma ordem
+    " Se tiver criando uma nova ordem, não faz nada
+    " Se for uma atualização, ele vai deletar os antigos (desatualizados)
+    DELETE FROM zovcabecalho WHERE ordemid = ls_cab-ordemid.
+
+    " Se houver itens a serem inseridos
+    IF lines( lt_item ) > 0.
+      " Inserindo itens com base na tabela lt_item
+      INSERT zovitem_ord FROM TABLE lt_item.
+
+      IF sy-subrc <> 0.
+        ROLLBACK WORK.
+
+        lo_msg->add_message_text_only(
+     EXPORTING
+       iv_msg_type = 'E'
+       iv_msg_text = 'Erro ao inserir itens'
+   ).
+
+        RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+          EXPORTING
+            message_container = lo_msg.
+      ENDIF.
+    ENDIF.
+
+    COMMIT WORK AND WAIT.
+
+    " Atualizando DEEP de retorno
+    " Cabeçalho
+    ls_deep_entity-ordemid = ls_cab-ordemid.
+    ls_deep_entity-criadopor = sy-uname.
+    CONVERT DATE ls_cab-criacao_data
+            TIME ls_cab-criacao_hora
+            INTO TIME STAMP ls_deep_entity-datacriacao
+            TIME ZONE 'UTC'.  "sy-zonlo
+
+    " Item
+    " Loop seta a OrdemId para a estrutura do item
+    LOOP AT ls_deep_entity-toItem ASSIGNING FIELD-SYMBOL(<ls_deep_item>).
+      <ls_deep_item>-ordemid = ls_cab-ordemid.
+    ENDLOOP.
+
+    " O objeto volta na response, passa a entity deep e retorna no er_deep_entity
+    CALL METHOD me->copy_data_to_ref
+      EXPORTING
+        is_data = ls_deep_entity
+      CHANGING
+        cr_data = er_deep_entity.
+  ENDMETHOD.
+ENDCLASS.
