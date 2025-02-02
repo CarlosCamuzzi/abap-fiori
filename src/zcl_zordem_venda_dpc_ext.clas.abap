@@ -7,6 +7,8 @@ CLASS zcl_zordem_venda_dpc_ext DEFINITION
 
     METHODS /iwbep/if_mgw_appl_srv_runtime~create_deep_entity
         REDEFINITION .
+    METHODS /iwbep/if_mgw_appl_srv_runtime~execute_action
+        REDEFINITION .
   PROTECTED SECTION.
 
     METHODS cabecalhoset_create_entity
@@ -342,11 +344,11 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
       ).
     ENDIF.
 
-    if ld_error = 'X'.
-        RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+    IF ld_error = 'X'.
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
         EXPORTING
           message_container = lo_msg
-          http_status_code = 400.
+          http_status_code  = 400.
     ENDIF.
 
     UPDATE zovcabecalho
@@ -762,4 +764,68 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
       CHANGING
         cr_data = er_deep_entity.
   ENDMETHOD.
+
+
+  METHOD /iwbep/if_mgw_appl_srv_runtime~execute_action.
+
+    DATA: ld_ordemid  TYPE zovcabecalho-ordemid,
+          ld_status   TYPE zovcabecalho-status,
+          " Tabela e estrutura de mensagens
+          lt_bapiret2 TYPE STANDARD TABLE OF zcl_zordem_venda_mpc_ext=>ts_mensagem,
+          ls_bapiret2 TYPE zcl_zordem_venda_mpc_ext=>ts_mensagem.
+
+    " Verificar o tipo da function import que está sendo chamada
+    IF iv_action_name = 'ZFI_ATUALIZA_STATUS_01'.
+    " Pegar os valores dos parâmentros de importação (que vem na uri)
+      ld_ordemid = it_parameter[ name = 'ID_ORDEMID' ]-value.
+      ld_status = it_parameter[ name = 'ID_STATUS' ]-value.
+
+      " Atualizar
+      UPDATE zovcabecalho
+         SET status = ld_status
+         WHERE ordemid = ld_ordemid.
+
+      " Se ok
+      " IF - mensagem de sucesso
+      " ELSE - se deu algo errado
+      IF sy-subrc = 0.
+        CLEAR ls_bapiret2.
+        ls_bapiret2-type = 'S'.
+        ls_bapiret2-message = 'Status atualizado'.
+        APPEND ls_bapiret2 TO lt_bapiret2.  " atualizar na tabela
+      ELSE.
+        CLEAR ls_bapiret2.
+        ls_bapiret2-type = 'E'.
+        ls_bapiret2-message = 'Erro ao atualizar status'.
+        APPEND ls_bapiret2 TO lt_bapiret2.
+      ENDIF.
+    ENDIF.
+
+    " Pegar a referência da tabela e setar no parâmetro
+    CALL METHOD me->copy_data_to_ref
+      EXPORTING
+        is_data = lt_bapiret2
+      CHANGING
+        cr_data = er_data.
+
+  ENDMETHOD.
+
 ENDCLASS.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
