@@ -681,7 +681,7 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
     " Deletar todos itens de uma ordem
     " Se tiver criando uma nova ordem, não faz nada
     " Se for uma atualização, ele vai deletar os antigos (desatualizados)
-    DELETE FROM zovcabecalho WHERE ordemid = ls_cab-ordemid.
+    DELETE FROM zovitem_ord WHERE ordemid = ls_cab-ordemid.
 
     " Se houver itens a serem inseridos
     IF lines( lt_item ) > 0.
