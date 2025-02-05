@@ -771,8 +771,8 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
     DATA: ld_ordemid  TYPE zovcabecalho-ordemid,
           ld_status   TYPE zovcabecalho-status,
           " Tabela e estrutura de mensagens
-          lt_bapiret2 TYPE STANDARD TABLE OF zcl_zordem_venda_mpc_ext=>ts_mensagem,
-          ls_bapiret2 TYPE zcl_zordem_venda_mpc_ext=>ts_mensagem.
+          lt_bapiret2 TYPE STANDARD TABLE OF zcl_zordem_venda_mpc_ext=>mensagem2,
+          ls_bapiret2 TYPE zcl_zordem_venda_mpc_ext=>mensagem2.
 
     " Verificar o tipo da function import que está sendo chamada
     IF iv_action_name = 'ZFI_ATUALIZA_STATUS_01'.
@@ -785,18 +785,15 @@ CLASS zcl_zordem_venda_dpc_ext IMPLEMENTATION.
          SET status = ld_status
          WHERE ordemid = ld_ordemid.
 
-      " Se ok
-      " IF - mensagem de sucesso
-      " ELSE - se deu algo errado
       IF sy-subrc = 0.
         CLEAR ls_bapiret2.
-        ls_bapiret2-type = 'S'.
-        ls_bapiret2-message = 'Status atualizado'.
-        APPEND ls_bapiret2 TO lt_bapiret2.  " atualizar na tabela
+        ls_bapiret2-tipo = 'S'.
+        ls_bapiret2-mensagem = 'Status atualizado'.
+        APPEND ls_bapiret2 TO lt_bapiret2.  " Atualizar message na tabela
       ELSE.
         CLEAR ls_bapiret2.
-        ls_bapiret2-type = 'E'.
-        ls_bapiret2-message = 'Erro ao atualizar status'.
+        ls_bapiret2-tipo = 'E'.
+        ls_bapiret2-mensagem = 'Erro ao atualizar status'.
         APPEND ls_bapiret2 TO lt_bapiret2.
       ENDIF.
     ENDIF.
